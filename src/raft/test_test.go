@@ -58,7 +58,8 @@ func TestReElection2A(t *testing.T) {
 	cfg.begin("Test (2A): election after network failure")
 
 	leader1 := cfg.checkOneLeader()
-
+	DPrintf("=======================================================================================")
+	DPrintf("%d 成为leader,并且失去连接", leader1)
 	// if the leader disconnects, a new one should be elected.
 	cfg.disconnect(leader1)
 	cfg.checkOneLeader()
@@ -66,9 +67,15 @@ func TestReElection2A(t *testing.T) {
 	// if the old leader rejoins, that shouldn't
 	// disturb the new leader. and the old leader
 	// should switch to follower.
-	cfg.connect(leader1)
-	leader2 := cfg.checkOneLeader()
 
+	cfg.connect(leader1)
+	DPrintf("=======================================================================================")
+	DPrintf("%d 重新连接", leader1)
+
+	leader2 := cfg.checkOneLeader()
+	DPrintf("=======================================================================================")
+	DPrintf("%d 成为leader,并且失去连接", leader2)
+	DPrintf("%d 失去连接", (leader2+1)%servers)
 	// if there's no quorum, no new leader should
 	// be elected.
 	cfg.disconnect(leader2)
@@ -80,9 +87,13 @@ func TestReElection2A(t *testing.T) {
 	cfg.checkNoLeader()
 
 	// if a quorum arises, it should elect a leader.
+	DPrintf("=======================================================================================")
+	DPrintf("%d 重新连接", (leader2+1)%servers)
 	cfg.connect((leader2 + 1) % servers)
 	cfg.checkOneLeader()
 
+	DPrintf("=======================================================================================")
+	DPrintf("%d 重新连接", leader2)
 	// re-join of last node shouldn't prevent leader from existing.
 	cfg.connect(leader2)
 	cfg.checkOneLeader()
@@ -274,28 +285,35 @@ func TestFailAgree2B(t *testing.T) {
 	cfg.begin("Test (2B): agreement after follower reconnects")
 
 	cfg.one(101, servers, false)
+	DPrintf("写入101完成")
 
 	// disconnect one follower from the network.
 	leader := cfg.checkOneLeader()
 	cfg.disconnect((leader + 1) % servers)
-
+	DPrintf("%d 失去连接", (leader+1)%servers)
 	// the leader and remaining follower should be
 	// able to agree despite the disconnected follower.
 	cfg.one(102, servers-1, false)
+	DPrintf("写入102完成")
 	cfg.one(103, servers-1, false)
+	DPrintf("写入103完成")
 	time.Sleep(RaftElectionTimeout)
 	cfg.one(104, servers-1, false)
+	DPrintf("写入104完成")
 	cfg.one(105, servers-1, false)
+	DPrintf("写入105完成")
 
 	// re-connect
 	cfg.connect((leader + 1) % servers)
-
+	DPrintf("%d 恢复连接", (leader+1)%servers)
 	// the full set of servers should preserve
 	// previous agreements, and be able to agree
 	// on new commands.
 	cfg.one(106, servers, true)
+	DPrintf("写入106完成")
 	time.Sleep(RaftElectionTimeout)
 	cfg.one(107, servers, true)
+	DPrintf("写入107完成")
 
 	cfg.end()
 }
@@ -308,13 +326,13 @@ func TestFailNoAgree2B(t *testing.T) {
 	cfg.begin("Test (2B): no agreement if too many followers disconnect")
 
 	cfg.one(10, servers, false)
-
+	DPrintf("插入10成功")
 	// 3 of 5 followers disconnect
 	leader := cfg.checkOneLeader()
 	cfg.disconnect((leader + 1) % servers)
 	cfg.disconnect((leader + 2) % servers)
 	cfg.disconnect((leader + 3) % servers)
-
+	DPrintf("3个服务器失联")
 	index, _, ok := cfg.rafts[leader].Start(20)
 	if ok != true {
 		t.Fatalf("leader rejected Start()")
@@ -334,7 +352,7 @@ func TestFailNoAgree2B(t *testing.T) {
 	cfg.connect((leader + 1) % servers)
 	cfg.connect((leader + 2) % servers)
 	cfg.connect((leader + 3) % servers)
-
+	DPrintf("3个服务器重新连接")
 	// the disconnected majority may have chosen a leader from
 	// among their own ranks, forgetting index 2.
 	leader2 := cfg.checkOneLeader()
@@ -460,11 +478,12 @@ func TestRejoin2B(t *testing.T) {
 	cfg.begin("Test (2B): rejoin of partitioned leader")
 
 	cfg.one(101, servers, true)
+	DPrintf("成功写入101")
 
 	// leader network failure
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect(leader1)
-
+	DPrintf("%d 失去联系", leader1)
 	// make old leader try to agree on some entries
 	cfg.rafts[leader1].Start(102)
 	cfg.rafts[leader1].Start(103)
@@ -472,20 +491,21 @@ func TestRejoin2B(t *testing.T) {
 
 	// new leader commits, also for index=2
 	cfg.one(103, 2, true)
-
+	DPrintf("成功写入103")
 	// new leader network failure
 	leader2 := cfg.checkOneLeader()
 	cfg.disconnect(leader2)
-
+	DPrintf("%d 失去联系", leader2)
 	// old leader connected again
 	cfg.connect(leader1)
-
+	DPrintf("%d 恢复联系", leader1)
 	cfg.one(104, 2, true)
-
+	DPrintf("成功写入104")
 	// all together now
 	cfg.connect(leader2)
-
+	DPrintf("%d 恢复联系==========================================================", leader2)
 	cfg.one(105, servers, true)
+	DPrintf("成功写入105")
 
 	cfg.end()
 }
@@ -498,32 +518,44 @@ func TestBackup2B(t *testing.T) {
 	cfg.begin("Test (2B): leader backs up quickly over incorrect follower logs")
 
 	cfg.one(rand.Int(), servers, true)
+	DPrintf("1.插入第一个随即数成功=============================================================================")
 
 	// put leader and one follower in a partition
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect((leader1 + 2) % servers)
+	DPrintf("%d 失去联系=============================================================================", (leader1+2)%servers)
 	cfg.disconnect((leader1 + 3) % servers)
+	DPrintf("%d 失去联系==================================================================================", (leader1+3)%servers)
 	cfg.disconnect((leader1 + 4) % servers)
+	DPrintf("%d 失去联系======================================================================================", (leader1+4)%servers)
 
 	// submit lots of commands that won't commit
 	for i := 0; i < 50; i++ {
 		cfg.rafts[leader1].Start(rand.Int())
 	}
+	DPrintf("2.插入50个随即数失败=====================================================================================")
 
 	time.Sleep(RaftElectionTimeout / 2)
 
 	cfg.disconnect((leader1 + 0) % servers)
+	DPrintf("%d 失去联系=============================================================================", (leader1+0)%servers)
 	cfg.disconnect((leader1 + 1) % servers)
+	DPrintf("%d 失去联系=============================================================================", (leader1+1)%servers)
+	DPrintf("全部失去联系=============================================================================")
 
 	// allow other partition to recover
 	cfg.connect((leader1 + 2) % servers)
+	DPrintf("%d 恢复联系=============================================================================", (leader1+2)%servers)
 	cfg.connect((leader1 + 3) % servers)
+	DPrintf("%d 恢复联系=============================================================================", (leader1+3)%servers)
 	cfg.connect((leader1 + 4) % servers)
+	DPrintf("%d 恢复联系=============================================================================", (leader1+4)%servers)
 
 	// lots of successful commands to new group.
 	for i := 0; i < 50; i++ {
 		cfg.one(rand.Int(), 3, true)
 	}
+	DPrintf("3.成功插入50个随机数=========================================================================")
 
 	// now another partitioned leader and one follower
 	leader2 := cfg.checkOneLeader()
@@ -532,11 +564,12 @@ func TestBackup2B(t *testing.T) {
 		other = (leader2 + 1) % servers
 	}
 	cfg.disconnect(other)
-
+	DPrintf("%d 失去联系=============================================================================", other)
 	// lots more commands that won't commit
 	for i := 0; i < 50; i++ {
 		cfg.rafts[leader2].Start(rand.Int())
 	}
+	DPrintf("4.插入50个随机数失败===========================================================================")
 
 	time.Sleep(RaftElectionTimeout / 2)
 
@@ -544,21 +577,27 @@ func TestBackup2B(t *testing.T) {
 	for i := 0; i < servers; i++ {
 		cfg.disconnect(i)
 	}
+	DPrintf("全部失去联系======================================================================================")
 	cfg.connect((leader1 + 0) % servers)
+	DPrintf("%d 恢复联系=============================================================================", (leader1+0)%servers)
 	cfg.connect((leader1 + 1) % servers)
+	DPrintf("%d 恢复联系=============================================================================", (leader1+1)%servers)
 	cfg.connect(other)
+	DPrintf("%d 恢复联系=============================================================================", other)
 
 	// lots of successful commands to new group.
 	for i := 0; i < 50; i++ {
 		cfg.one(rand.Int(), 3, true)
 	}
+	DPrintf("5.插入50个随机数成功==============================================================================")
 
 	// now everyone
 	for i := 0; i < servers; i++ {
 		cfg.connect(i)
 	}
+	DPrintf("全部恢复===========================================================================================")
 	cfg.one(rand.Int(), servers, true)
-
+	DPrintf("5.插入1个随机数成功==============================================================================")
 	cfg.end()
 }
 
@@ -680,41 +719,63 @@ func TestPersist12C(t *testing.T) {
 	cfg.begin("Test (2C): basic persistence")
 
 	cfg.one(11, servers, true)
+	DPrintf("成功插入11=========================================================================================================")
 
 	// crash and re-start all
 	for i := 0; i < servers; i++ {
 		cfg.start1(i, cfg.applier)
+		DPrintf("%d 重启========================================================================================================", i)
 	}
+
 	for i := 0; i < servers; i++ {
 		cfg.disconnect(i)
+		DPrintf("%d 失去联系======================================================================================================", i)
 		cfg.connect(i)
+		DPrintf("%d 恢复联系=======================================================================================================", i)
 	}
 
 	cfg.one(12, servers, true)
-
+	DPrintf("成功插入12=========================================================================================================")
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect(leader1)
+	DPrintf("%d 失去联系======================================================================================================", leader1)
 	cfg.start1(leader1, cfg.applier)
+	DPrintf("%d 重启========================================================================================================", leader1)
+
 	cfg.connect(leader1)
+	DPrintf("%d 恢复联系=======================================================================================================", leader1)
 
 	cfg.one(13, servers, true)
-
+	DPrintf("成功插入13=========================================================================================================")
 	leader2 := cfg.checkOneLeader()
 	cfg.disconnect(leader2)
+	DPrintf("%d 失去联系======================================================================================================", leader2)
+
 	cfg.one(14, servers-1, true)
+	DPrintf("成功插入14=========================================================================================================")
 	cfg.start1(leader2, cfg.applier)
+	DPrintf("%d 重启========================================================================================================", leader2)
+
 	cfg.connect(leader2)
+	DPrintf("%d 恢复联系=======================================================================================================", leader2)
 
 	cfg.wait(4, servers, -1) // wait for leader2 to join before killing i3
+	DPrintf("wait for leader2 to join before killing i3=============================================================")
 
 	i3 := (cfg.checkOneLeader() + 1) % servers
 	cfg.disconnect(i3)
+	DPrintf("%d 失去联系======================================================================================================", i3)
+
 	cfg.one(15, servers-1, true)
+	DPrintf("成功插入15=========================================================================================================")
 	cfg.start1(i3, cfg.applier)
+	DPrintf("%d 重启========================================================================================================", i3)
+
 	cfg.connect(i3)
+	DPrintf("%d 恢复联系=======================================================================================================", i3)
 
 	cfg.one(16, servers, true)
-
+	DPrintf("成功插入16=========================================================================================================")
 	cfg.end()
 }
 
