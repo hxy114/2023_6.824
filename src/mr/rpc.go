@@ -9,10 +9,14 @@ package mr
 import "os"
 import "strconv"
 
-//
 // example to show how to declare the arguments
 // and reply for an RPC.
-//
+var (
+	MAP_TASK    = 1
+	REDUCE_TASK = 2
+	WAIT        = 3
+	PLEASE_QUIT = 4
+)
 
 type ExampleArgs struct {
 	X int
@@ -23,7 +27,25 @@ type ExampleReply struct {
 }
 
 // Add your RPC definitions here.
+type Task struct {
+	TaskType int
+	TaskNum  int
+	FileName []string
+}
+type AskTaskArgs struct {
+	Ask string
+}
 
+type AskTaskReply struct {
+	Task      Task
+	ReduceNum int
+}
+type SubmitTaskArgs struct {
+	Task Task
+}
+type SubmitTaskReply struct {
+	Reply string
+}
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
