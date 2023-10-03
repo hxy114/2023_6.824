@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # 定义要执行的命令
-command1="go test -run 2B >>result1.txt"
-command2="echo '==============================================================================================================='>>result.txt"
+command1="go test -run 2C >>result2C.txt"
+command2="echo '==============================================================================================================='>>result2C.txt"
 # 定义循环次数
-num_iterations=20
+num_iterations=50
 
 # 使用for循环多次执行命令
 for i in $(seq 1 $num_iterations)

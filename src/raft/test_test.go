@@ -8,7 +8,11 @@ package raft
 // test with the original before submitting.
 //
 
-import "testing"
+import (
+	"log"
+	"os"
+	"testing"
+)
 import "fmt"
 import "time"
 import "math/rand"
@@ -712,6 +716,13 @@ loop:
 }
 
 func TestPersist12C(t *testing.T) {
+	filehandle, err := os.OpenFile("./log.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
 	servers := 3
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -780,6 +791,13 @@ func TestPersist12C(t *testing.T) {
 }
 
 func TestPersist22C(t *testing.T) {
+	filehandle, err := os.OpenFile("./log.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
 	servers := 5
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -789,35 +807,52 @@ func TestPersist22C(t *testing.T) {
 	index := 1
 	for iters := 0; iters < 5; iters++ {
 		cfg.one(10+index, servers, true)
+		DPrintf("插入%d成功======================================================================", 10+index)
+
 		index++
 
 		leader1 := cfg.checkOneLeader()
+		DPrintf("%d 成为领导======================================================================", leader1)
 
 		cfg.disconnect((leader1 + 1) % servers)
+		DPrintf("%d 失去连接======================================================================", (leader1+1)%servers)
+
 		cfg.disconnect((leader1 + 2) % servers)
+		DPrintf("%d 失去连接======================================================================", (leader1+2)%servers)
 
 		cfg.one(10+index, servers-2, true)
+		DPrintf("插入%d成功======================================================================", 10+index)
 		index++
 
 		cfg.disconnect((leader1 + 0) % servers)
+		DPrintf("%d 失去连接======================================================================", (leader1+0)%servers)
 		cfg.disconnect((leader1 + 3) % servers)
+		DPrintf("%d 失去连接======================================================================", (leader1+3)%servers)
 		cfg.disconnect((leader1 + 4) % servers)
-
+		DPrintf("%d 失去连接======================================================================", (leader1+4)%servers)
 		cfg.start1((leader1+1)%servers, cfg.applier)
+		DPrintf("%d重新开启服务======================================================================", (leader1+1)%servers)
 		cfg.start1((leader1+2)%servers, cfg.applier)
+		DPrintf("%d重新开启服务======================================================================", (leader1+2)%servers)
 		cfg.connect((leader1 + 1) % servers)
+		DPrintf("%d 恢复连接======================================================================", (leader1+1)%servers)
 		cfg.connect((leader1 + 2) % servers)
+		DPrintf("%d 恢复连接======================================================================", (leader1+2)%servers)
 
 		time.Sleep(RaftElectionTimeout)
 
 		cfg.start1((leader1+3)%servers, cfg.applier)
+		DPrintf("%d重新开启服务======================================================================", (leader1+3)%servers)
 		cfg.connect((leader1 + 3) % servers)
-
+		DPrintf("%d 恢复连接======================================================================", (leader1+3)%servers)
 		cfg.one(10+index, servers-2, true)
+		DPrintf("插入%d成功======================================================================", 10+index)
 		index++
 
 		cfg.connect((leader1 + 4) % servers)
+		DPrintf("%d 恢复连接======================================================================", (leader1+4)%servers)
 		cfg.connect((leader1 + 0) % servers)
+		DPrintf("%d 恢复连接======================================================================", (leader1+0)%servers)
 	}
 
 	cfg.one(1000, servers, true)
@@ -949,6 +984,13 @@ func TestUnreliableAgree2C(t *testing.T) {
 }
 
 func TestFigure8Unreliable2C(t *testing.T) {
+	filehandle, err := os.OpenFile("./log.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
 	servers := 5
 	cfg := make_config(t, servers, true, false)
 	defer cfg.cleanup()
@@ -998,12 +1040,19 @@ func TestFigure8Unreliable2C(t *testing.T) {
 		}
 	}
 
-	cfg.one(rand.Int()%10000, servers, true)
-
+	//cfg.one(rand.Int()%10000, servers, true)
+	cfg.one(10000, servers, true)
 	cfg.end()
 }
 
 func internalChurn(t *testing.T, unreliable bool) {
+	/*filehandle, err := os.OpenFile("./log.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle) */ // 这条代码，就是设置了日志文件的重定向
 
 	servers := 5
 	cfg := make_config(t, servers, unreliable, false)
@@ -1072,23 +1121,39 @@ func internalChurn(t *testing.T, unreliable bool) {
 	}
 
 	for iters := 0; iters < 20; iters++ {
+		DPrintf("iter:%d=========================================================================================================", iters)
 		if (rand.Int() % 1000) < 200 {
 			i := rand.Int() % servers
+			DPrintf("1.i:%d被断开连接=========================================================================================================", i)
 			cfg.disconnect(i)
+			DPrintf("2.i:%d被断开连接=========================================================================================================", i)
+
 		}
 
 		if (rand.Int() % 1000) < 500 {
 			i := rand.Int() % servers
 			if cfg.rafts[i] == nil {
+				DPrintf("1.i:%d开始服务=========================================================================================================", i)
+
 				cfg.start1(i, cfg.applier)
+				DPrintf("2.i:%d开始服务=========================================================================================================", i)
+
 			}
+			DPrintf("1.i:%d建立连接=========================================================================================================", i)
+
 			cfg.connect(i)
+			DPrintf("2.i:%d建立连接=========================================================================================================", i)
+
 		}
 
 		if (rand.Int() % 1000) < 200 {
 			i := rand.Int() % servers
 			if cfg.rafts[i] != nil {
+				DPrintf("1.i:%d crash=========================================================================================================", i)
+
 				cfg.crash1(i)
+				DPrintf("2.i:%d crash=========================================================================================================", i)
+
 			}
 		}
 

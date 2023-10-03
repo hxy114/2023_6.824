@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# 定义要执行的命令
+command1="go test -run 2A >>result2A.txt"
+command2="echo '==============================================================================================================='>>result2A.txt"
+# 定义循环次数
+num_iterations=50
+
+# 使用for循环多次执行命令
+for i in $(seq 1 $num_iterations)
+do
+    #echo "执行命令: $command"
+    # 在这里可以替换为你要执行的具体命令，比如使用$command执行某个命令
+     eval "$command1"
+     eval "$command2"
+done
