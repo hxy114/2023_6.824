@@ -24,6 +24,13 @@ import "sync"
 const RaftElectionTimeout = 1000 * time.Millisecond
 
 func TestInitialElection2A(t *testing.T) {
+	filehandle, err := os.OpenFile("./log1.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
 	servers := 3
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -55,6 +62,13 @@ func TestInitialElection2A(t *testing.T) {
 }
 
 func TestReElection2A(t *testing.T) {
+	filehandle, err := os.OpenFile("./log1.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
 	servers := 3
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -1224,6 +1238,13 @@ func TestUnreliableChurn2C(t *testing.T) {
 const MAXLOGSIZE = 2000
 
 func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash bool) {
+	filehandle, err := os.OpenFile("./log.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
 	iters := 30
 	servers := 3
 	cfg := make_config(t, servers, !reliable, true)
@@ -1232,19 +1253,26 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 	cfg.begin(name)
 
 	cfg.one(rand.Int(), servers, true)
+	DPrintf("成功插入第一个数==================================================")
 	leader1 := cfg.checkOneLeader()
 
 	for i := 0; i < iters; i++ {
 		victim := (leader1 + 1) % servers
+		DPrintf("vicitm:%d========================================================", victim)
 		sender := leader1
+		DPrintf("sender:%d========================================================", sender)
 		if i%3 == 1 {
 			sender = (leader1 + 1) % servers
 			victim = leader1
+			DPrintf("vicitm:%d========================================================", victim)
+			DPrintf("sender:%d========================================================", sender)
 		}
 
 		if disconnect {
 			cfg.disconnect(victim)
+			DPrintf("%d失去连接======================================================================", victim)
 			cfg.one(rand.Int(), servers-1, true)
+			DPrintf("%d失去连接插入一个数成功=============================================================", victim)
 		}
 		if crash {
 			cfg.crash1(victim)
@@ -1253,8 +1281,10 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 
 		// perhaps send enough to get a snapshot
 		nn := (SnapShotInterval / 2) + (rand.Int() % SnapShotInterval)
+		DPrintf("接下来发送%d条消息===============================================================", nn)
 		for i := 0; i < nn; i++ {
 			cfg.rafts[sender].Start(rand.Int())
+			DPrintf("第%d条消息发送================================================================", i)
 		}
 
 		// let applier threads catch up with the Start()'s
@@ -1263,8 +1293,10 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 			// an InstallSnapshot RPC isn't required for
 			// TestSnapshotBasic2D().
 			cfg.one(rand.Int(), servers, true)
+			DPrintf("插入disconnect == false && crash == false的最后一条消息====================================")
 		} else {
 			cfg.one(rand.Int(), servers-1, true)
+			DPrintf("插入disconnect ！= false && crash != false的最后两条消息====================================")
 		}
 
 		if cfg.LogSize() >= MAXLOGSIZE {
@@ -1274,7 +1306,9 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 			// reconnect a follower, who maybe behind and
 			// needs to rceive a snapshot to catch up.
 			cfg.connect(victim)
+			DPrintf("%d恢复连接======================================================================", victim)
 			cfg.one(rand.Int(), servers, true)
+			DPrintf("插入disconnect ！= false 的最后一条消息====================================")
 			leader1 = cfg.checkOneLeader()
 		}
 		if crash {
@@ -1320,28 +1354,38 @@ func TestSnapshotAllCrash2D(t *testing.T) {
 	cfg.begin("Test (2D): crash and restart all servers")
 
 	cfg.one(rand.Int(), servers, true)
-
+	//cfg.one(-1, servers, true)
 	for i := 0; i < iters; i++ {
 		// perhaps enough to get a snapshot
 		nn := (SnapShotInterval / 2) + (rand.Int() % SnapShotInterval)
+		DPrintf("下面要开始插入%d条消息", nn)
 		for i := 0; i < nn; i++ {
 			cfg.one(rand.Int(), servers, true)
+			//cfg.one(i, servers, true)
 		}
 
 		index1 := cfg.one(rand.Int(), servers, true)
+		//index1 := cfg.one(100, servers, true)
 
 		// crash all
 		for i := 0; i < servers; i++ {
+			DPrintf("%d 开始crash============================================================", i)
 			cfg.crash1(i)
+			DPrintf("%d 结束crash============================================================", i)
 		}
 
 		// revive all
 		for i := 0; i < servers; i++ {
+			DPrintf("%d 开始start1============================================================", i)
 			cfg.start1(i, cfg.applierSnap)
+			DPrintf("%d 结束start1============================================================", i)
+			DPrintf("%d 开始connect============================================================", i)
 			cfg.connect(i)
+			DPrintf("%d 结束connect============================================================", i)
 		}
 
 		index2 := cfg.one(rand.Int(), servers, true)
+		//index2 := cfg.one(101, servers, true)
 		if index2 < index1+1 {
 			t.Fatalf("index decreased from %v to %v", index1, index2)
 		}
