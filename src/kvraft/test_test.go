@@ -1,6 +1,8 @@
 package kvraft
 
-import "6.5840/porcupine"
+import (
+	"6.5840/porcupine"
+)
 import "6.5840/models"
 import "testing"
 import "strconv"
@@ -211,6 +213,16 @@ func partitioner(t *testing.T, cfg *config, ch chan bool, done *int32) {
 // snapshots shouldn't be used.
 func GenericTest(t *testing.T, part string, nclients int, nservers int, unreliable bool, crash bool, partitions bool, maxraftstate int, randomkeys bool) {
 
+	/*filehandle, err := os.OpenFile("./log1.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
+	os.Stdout = filehandle
+
+	os.Stderr = filehandle*/
 	title := "Test: "
 	if unreliable {
 		// the network drops RPC requests and replies.
@@ -596,6 +608,13 @@ func TestPersistPartitionUnreliableLinearizable3A(t *testing.T) {
 // also checks that majority discards committed log entries
 // even if minority doesn't respond.
 func TestSnapshotRPC3B(t *testing.T) {
+	/*filehandle, err := os.OpenFile("./log1.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)*/
 	const nservers = 3
 	maxraftstate := 1000
 	cfg := make_config(t, nservers, false, maxraftstate)
@@ -716,5 +735,5 @@ func TestSnapshotUnreliableRecoverConcurrentPartition3B(t *testing.T) {
 
 func TestSnapshotUnreliableRecoverConcurrentPartitionLinearizable3B(t *testing.T) {
 	// Test: unreliable net, restarts, partitions, snapshots, random keys, many clients (3B) ...
-	GenericTest(t, "3B", 15, 7, true, true, true, 1000, true)
+	GenericTest(t, "3B", 20, 7, true, true, true, 1000, true)
 }

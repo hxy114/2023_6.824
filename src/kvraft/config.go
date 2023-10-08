@@ -83,10 +83,13 @@ func (cfg *config) LogSize() int {
 	logsize := 0
 	for i := 0; i < cfg.n; i++ {
 		n := cfg.saved[i].RaftStateSize()
+		//DPrintf("%d的RaftStateSize是%d", i, n)
+		//fmt.Printf("%d的RaftStateSize是%d\n", i, n)
 		if n > logsize {
 			logsize = n
 		}
 	}
+	//println("===========================================================")
 	return logsize
 }
 
