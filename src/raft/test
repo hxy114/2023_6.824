@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 定义要执行的命令
-command1="time go test  >>result.txt"
+command1="go test  >>result.txt"
 command2="echo '==============================================================================================================='>>result.txt"
 # 定义循环次数
 num_iterations=50

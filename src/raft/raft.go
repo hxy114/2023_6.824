@@ -94,6 +94,7 @@ type Raft struct {
 	lastIncludedIndex int
 	lastIncludedTerm  int
 	snapshot          []byte
+	killChan          chan interface{}
 }
 
 // return currentTerm and whether this server
@@ -163,6 +164,7 @@ func (rf *Raft) readPersist(data []byte, snapshot []byte) {
 		rf.VoteFor = voteFor
 		rf.lastIncludedTerm = lastIncludedTerm
 		rf.lastIncludedIndex = lastIncludedIndex
+		rf.commitIndex = lastIncludedIndex
 		rf.Log = log
 	}
 	// Your code here (2C).
@@ -209,6 +211,12 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	DPrintf("%d 完成快照,index:%d,lastIncludedIndex:%d,len(rf.snapshot):%d", rf.me, index, rf.lastIncludedIndex, len(rf.snapshot))
 	rf.mu.Unlock()
 
+}
+func (rf *Raft) GetPersistLogSize() int {
+	//rf.mu.Lock()
+	//DPrintf("获取到PersistLogSize的锁")
+	//defer rf.mu.Unlock()
+	return rf.persister.RaftStateSize()
 }
 
 type AppendEntriesArgs struct {
@@ -301,6 +309,14 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			return
 		} else {
 			DPrintf("%d 拒绝投票给 %d", rf.me, args.CandidateId)
+			if args.Term > rf.CurrentTerm {
+				rf.state = FOLLOWER
+				rf.VoteFor = -1
+				rf.CurrentTerm = args.Term
+				rf.appendCond.Broadcast()
+				reply.VoteGranted = false
+				rf.persist()
+			}
 			reply.VoteGranted = false
 			reply.Term = rf.CurrentTerm
 			return
@@ -369,7 +385,9 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 				rf.snapshot = clone(args.Snapshot)
 				rf.lastIncludedIndex = args.LastIncludedIndex
 				rf.lastIncludedTerm = args.LastIncludedTerm
-				rf.submitSnapshot(args.LastIncludedTerm, args.LastIncludedIndex)
+				rf.commitIndex = rf.lastIncludedIndex
+				rf.submitCond.Broadcast()
+				//rf.submitSnapshot(args.LastIncludedTerm, args.LastIncludedIndex)
 			} else {
 				DPrintf("%d 收到%d 过期的snapshot,并且重置选举时间", rf.me, args.LeaderId)
 			}
@@ -468,7 +486,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 				rf.appendCond.Broadcast()
 				rf.CurrentTerm = args.Term
 				rf.VoteFor = args.Leader
-				rf.persist()
+
 				/*if rf.checkAppendEntries(args) && rf.commitIndex < args.LeaderCommit {
 					if args.LeaderCommit > args.PrevLogIndex {
 						rf.commitIndex = args.PrevLogIndex
@@ -485,6 +503,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 					reply.XTerm = -1
 					reply.XIndex = -1
 				} else {
+
 					reply.XLen = len(rf.Log) + rf.lastIncludedIndex
 					reply.XTerm = rf.Log[args.PrevLogIndex-rf.lastIncludedIndex-1].Term
 					for i := args.PrevLogIndex; i > rf.lastIncludedIndex; i-- {
@@ -495,8 +514,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 							reply.XIndex = i
 						}
 					}
+					rf.Log = rf.Log[:args.PrevLogIndex-rf.lastIncludedIndex-1]
 				}
-
+				rf.persist()
 				rf.done = 1
 				return
 			} else {
@@ -570,7 +590,7 @@ func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply
 // the leader.
 func (rf *Raft) submit() {
 	rf.mu.Lock()
-	rf.submitSnapshot(rf.lastIncludedTerm, rf.lastIncludedIndex)
+	//rf.submitSnapshot(rf.lastIncludedTerm, rf.lastIncludedIndex)
 	/*	go func() {
 		for {
 			select {
@@ -604,42 +624,125 @@ func (rf *Raft) submit() {
 				return
 			}
 		}
-		DPrintf("%d 的commitIndex:%d,lastApplied %d", rf.me, rf.commitIndex, rf.lastApplied)
-		DPrintf("%d 提交给应用log，index:%d ,len(logs):%d", rf.me, rf.lastApplied+1, len(rf.Log))
-		applyMsg := ApplyMsg{
-			CommandValid: true,
-			Command:      rf.Log[rf.lastApplied-rf.lastIncludedIndex].Command,
-			CommandIndex: rf.lastApplied + 1,
+		if rf.lastApplied >= rf.lastIncludedIndex {
+			DPrintf("%d 的commitIndex:%d,lastApplied %d", rf.me, rf.commitIndex, rf.lastApplied)
+			DPrintf("%d 提交给应用log，index:%d ,len(logs):%d", rf.me, rf.lastApplied+1, len(rf.Log))
+			applyMsg := ApplyMsg{
+				CommandValid: true,
+				Command:      rf.Log[rf.lastApplied-rf.lastIncludedIndex].Command,
+				CommandIndex: rf.lastApplied + 1,
 
-			// For 2D:
-			SnapshotValid: false,
-			Snapshot:      make([]byte, 0, 0),
-			SnapshotTerm:  -1,
-			SnapshotIndex: -1,
-		}
-		DPrintf("%d 提交给应用log准备就绪，index:%d ,len(logs):%d", rf.me, rf.lastApplied+1, len(rf.Log))
-		select {
-		case rf.applyCh <- applyMsg:
-			DPrintf("%d 提交给应用log，index:%d ,len(logs):%d结束", rf.me, rf.lastApplied+1, len(rf.Log))
-			rf.lastApplied++
-			rf.mu.Unlock()
-			time.Sleep(1 * time.Millisecond)
-			rf.mu.Lock()
-			if rf.killed() {
-				DPrintf("%d 被杀", rf.me)
-				rf.mu.Unlock()
-				return
+				// For 2D:
+				SnapshotValid: false,
+				Snapshot:      make([]byte, 0),
+				SnapshotTerm:  -1,
+				SnapshotIndex: -1,
 			}
-		default:
-			DPrintf("%d 提交给应用log，index:%d ,len(logs):%d应用繁忙拒绝", rf.me, rf.lastApplied+1, len(rf.Log))
+			DPrintf("%d 提交给应用log准备就绪，index:%d ,len(logs):%d", rf.me, rf.lastApplied+1, len(rf.Log))
+			logLen := len(rf.Log)
 			rf.mu.Unlock()
-			time.Sleep(1 * time.Millisecond)
-			rf.mu.Lock()
-			if rf.killed() {
-				DPrintf("%d 被杀", rf.me)
-				rf.mu.Unlock()
+			select {
+			case <-rf.killChan:
 				return
+			default:
+				select {
+				case <-rf.killChan:
+					return
+				case rf.applyCh <- applyMsg:
+					rf.mu.Lock()
+					DPrintf("%d 提交给应用log，index:%d ,len(logs):%d结束", rf.me, applyMsg.CommandIndex, logLen)
+					rf.lastApplied++
+
+				}
 			}
+
+			/*			select {
+						case rf.applyCh <- applyMsg:
+							DPrintf("%d 提交给应用log，index:%d ,len(logs):%d结束", rf.me, rf.lastApplied+1, len(rf.Log))
+							rf.lastApplied++
+							rf.mu.Unlock()
+							time.Sleep(1 * time.Millisecond)
+							rf.mu.Lock()
+							if rf.killed() {
+								DPrintf("%d 被杀", rf.me)
+								rf.mu.Unlock()
+								return
+							}
+						case <-time.After(50 * time.Millisecond):
+							DPrintf("%d 提交给应用log，index:%d ,len(logs):%d应用繁忙拒绝", rf.me, rf.lastApplied+1, len(rf.Log))
+							rf.mu.Unlock()
+							time.Sleep(1 * time.Millisecond)
+							rf.mu.Lock()
+							if rf.killed() {
+								DPrintf("%d 被杀", rf.me)
+								rf.mu.Unlock()
+								return
+							}
+
+						}*/
+		} else {
+			DPrintf("%d 正在提交快照", rf.me)
+			if rf.snapshot != nil && len(rf.snapshot) > 0 {
+				DPrintf("%d 的commitIndex:%d,lastApplied %d,len(rf.snapshot):%d", rf.me, rf.commitIndex, rf.lastApplied, len(rf.snapshot))
+				DPrintf("%d 提交给应用snapshot，snapshotTerm:%d ,snapshotIndex:%d", rf.me, rf.lastIncludedTerm, rf.lastIncludedIndex)
+				applyMsg := ApplyMsg{
+					CommandValid: false,
+					Command:      nil,
+					CommandIndex: 0,
+
+					// For 2D:
+					SnapshotValid: true,
+					SnapshotTerm:  rf.lastIncludedTerm,
+					SnapshotIndex: rf.lastIncludedIndex,
+				}
+				applyMsg.Snapshot = clone(rf.snapshot)
+				DPrintf("%d组织好submitSnapshot", rf.me)
+				//rf.applyCh <- applyMsg
+				lastIncludedIndex := rf.lastIncludedIndex
+				rf.mu.Unlock()
+				select {
+				case <-rf.killChan:
+					return
+				default:
+					select {
+					case <-rf.killChan:
+						return
+					case rf.applyCh <- applyMsg:
+						rf.mu.Lock()
+						DPrintf("%d发送好submitSnapshot", rf.me)
+						//rf.commitIndex = rf.lastIncludedIndex
+						rf.lastApplied = lastIncludedIndex
+
+					}
+				}
+
+				/*select {
+				case rf.applyCh <- applyMsg:
+					DPrintf("%d发送好submitSnapshot", rf.me)
+					//rf.commitIndex = rf.lastIncludedIndex
+					rf.lastApplied = rf.lastIncludedIndex
+					rf.mu.Unlock()
+					time.Sleep(1 * time.Millisecond)
+					rf.mu.Lock()
+					if rf.killed() {
+						DPrintf("%d 被杀", rf.me)
+						rf.mu.Unlock()
+						return
+					}
+				case <-time.After(50 * time.Millisecond):
+					DPrintf("%d 提交给应用snapshot，snapshotTerm:%d ,snapshotIndex:%d应用繁忙拒绝", rf.me, rf.lastIncludedTerm, rf.lastIncludedIndex)
+					rf.mu.Unlock()
+					time.Sleep(1 * time.Millisecond)
+					rf.mu.Lock()
+					if rf.killed() {
+						DPrintf("%d 被杀", rf.me)
+						rf.mu.Unlock()
+						return
+					}
+
+				}*/
+			}
+			DPrintf("%d 结束提交快照", rf.me)
 
 		}
 
@@ -744,15 +847,19 @@ func (rf *Raft) runAppendEntries(term int) {
 						}
 						reply := &InstallSnapshotReply{}
 
-						c1 := make(chan bool)
-						c2 := make(chan bool)
+						c1 := make(chan bool, 1)
+						c2 := make(chan bool, 1)
+						okMux := sync.Mutex{}
 						ok := false
 						go func() {
-							ok = rf.sendInstallSnapshot(i, args, reply)
+							ok1 := rf.sendInstallSnapshot(i, args, reply)
+							okMux.Lock()
+							ok = ok1
+							okMux.Unlock()
 							c1 <- true
 						}()
 						go func() {
-							time.Sleep(1 * time.Second)
+							time.Sleep(100 * time.Millisecond)
 							c2 <- true
 						}()
 						select {
@@ -764,6 +871,7 @@ func (rf *Raft) runAppendEntries(term int) {
 
 						rf.mu.Lock()
 						if rf.CurrentTerm == term {
+							okMux.Lock()
 							if ok && reply.Term <= term {
 								DPrintf("%d 成功收到 %d添加snapshot的消息,并成功 ", me, i)
 								rf.matchIndex[i] = lastIncludedIndex
@@ -779,6 +887,7 @@ func (rf *Raft) runAppendEntries(term int) {
 							} else {
 								DPrintf("%d 失去联系 ", i)
 							}
+							okMux.Unlock()
 
 						}
 						rf.mu.Unlock()
@@ -806,15 +915,19 @@ func (rf *Raft) runAppendEntries(term int) {
 
 						reply := &AppendEntriesReply{}
 						DPrintf("%d 发送AppendEntries给 %d,len(entries):%d，最后一条log是 %d\n", me, i, len(args.Entries), args.Entries[len(args.Entries)-1])
-						c1 := make(chan bool)
-						c2 := make(chan bool)
+						c1 := make(chan bool, 1)
+						c2 := make(chan bool, 1)
+						okMux := sync.Mutex{}
 						ok := false
 						go func() {
-							ok = rf.sendAppendEntries(i, args, reply)
+							ok1 := rf.sendAppendEntries(i, args, reply)
+							okMux.Lock()
+							ok = ok1
+							okMux.Unlock()
 							c1 <- true
 						}()
 						go func() {
-							time.Sleep(1 * time.Second)
+							time.Sleep(100 * time.Millisecond)
 							c2 <- true
 						}()
 						select {
@@ -825,6 +938,7 @@ func (rf *Raft) runAppendEntries(term int) {
 						}
 						rf.mu.Lock()
 						if rf.CurrentTerm == term {
+							okMux.Lock()
 							if ok && reply.Success {
 								DPrintf("%d 成功收到 %d添加log的消息 ，index:%d", me, i, nextIndex)
 								rf.matchIndex[i] = lastIncludedIndex + len(logs)
@@ -841,7 +955,7 @@ func (rf *Raft) runAppendEntries(term int) {
 								} else {
 									DPrintf("日志不统一")
 									if reply.XTerm > -1 {
-										if reply.XIndex <= lastIncludedIndex {
+										if reply.XIndex <= rf.lastIncludedIndex {
 											rf.nextIndex[i] = reply.XIndex
 
 										} else {
@@ -867,6 +981,7 @@ func (rf *Raft) runAppendEntries(term int) {
 							} else {
 								DPrintf("%d 失去联系 ，preindex:%d", i, nextIndex-1)
 							}
+							okMux.Unlock()
 
 						}
 						rf.mu.Unlock()
@@ -927,7 +1042,7 @@ func (rf *Raft) Kill() {
 	atomic.StoreInt32(&rf.dead, 1)
 	rf.appendCond.Broadcast()
 	rf.submitCond.Broadcast()
-
+	rf.killChan <- 1
 	rf.isStartCond.Broadcast()
 	DPrintf("%d 结束kill", rf.me)
 	rf.mu.Unlock()
@@ -941,11 +1056,11 @@ func (rf *Raft) killed() bool {
 func (rf *Raft) KillOffElection() {
 	rf.mu.Lock()
 	rf.state = CANDIDATER
-	muIncTerm.Lock()
+	/*muIncTerm.Lock()
 	rf.CurrentTerm = incTerm
 	incTerm++
-	muIncTerm.Unlock()
-	//rf.CurrentTerm += 1
+	muIncTerm.Unlock()*/
+	rf.CurrentTerm += 1
 	DPrintf("%d candidater term %d", rf.me, rf.CurrentTerm)
 	term := rf.CurrentTerm
 	rf.VoteFor = rf.me
@@ -990,7 +1105,7 @@ func (rf *Raft) KillOffElection() {
 				} else if ok && !reply.VoteGranted {
 					lock.Lock()
 					rf.mu.Lock()
-					if term == rf.CurrentTerm && rf.CurrentTerm < reply.Term {
+					if term == rf.CurrentTerm && rf.CurrentTerm < reply.Term && rf.state == CANDIDATER {
 
 						rf.CurrentTerm = reply.Term
 						rf.VoteFor = -1
@@ -1161,6 +1276,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	rf.applyCh = applyCh
 	rf.myApplyCh = make(chan ApplyMsg, 10000)
+	rf.killChan = make(chan interface{}, 1)
 	rf.VoteFor = -1
 	rf.state = FOLLOWER
 	rf.CurrentTerm = 0

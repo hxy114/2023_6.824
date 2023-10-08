@@ -4,7 +4,7 @@
 command1="go test -run 2B >>result2B.txt"
 command2="echo '==============================================================================================================='>>result2B.txt"
 # 定义循环次数
-num_iterations=50
+num_iterations=500
 
 # 使用for循环多次执行命令
 for i in $(seq 1 $num_iterations)

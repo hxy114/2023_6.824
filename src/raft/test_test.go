@@ -9,8 +9,6 @@ package raft
 //
 
 import (
-	"log"
-	"os"
 	"testing"
 )
 import "fmt"
@@ -24,13 +22,6 @@ import "sync"
 const RaftElectionTimeout = 1000 * time.Millisecond
 
 func TestInitialElection2A(t *testing.T) {
-	filehandle, err := os.OpenFile("./log1.txt",
-		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-
-	if err != nil {
-		return
-	}
-	log.SetOutput(filehandle)
 	servers := 3
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -62,13 +53,6 @@ func TestInitialElection2A(t *testing.T) {
 }
 
 func TestReElection2A(t *testing.T) {
-	filehandle, err := os.OpenFile("./log1.txt",
-		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-
-	if err != nil {
-		return
-	}
-	log.SetOutput(filehandle)
 	servers := 3
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -730,13 +714,6 @@ loop:
 }
 
 func TestPersist12C(t *testing.T) {
-	filehandle, err := os.OpenFile("./log.txt",
-		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-
-	if err != nil {
-		return
-	}
-	log.SetOutput(filehandle)
 	servers := 3
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -805,13 +782,6 @@ func TestPersist12C(t *testing.T) {
 }
 
 func TestPersist22C(t *testing.T) {
-	filehandle, err := os.OpenFile("./log.txt",
-		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-
-	if err != nil {
-		return
-	}
-	log.SetOutput(filehandle)
 	servers := 5
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -998,13 +968,6 @@ func TestUnreliableAgree2C(t *testing.T) {
 }
 
 func TestFigure8Unreliable2C(t *testing.T) {
-	filehandle, err := os.OpenFile("./log.txt",
-		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-
-	if err != nil {
-		return
-	}
-	log.SetOutput(filehandle)
 	servers := 5
 	cfg := make_config(t, servers, true, false)
 	defer cfg.cleanup()
@@ -1060,14 +1023,6 @@ func TestFigure8Unreliable2C(t *testing.T) {
 }
 
 func internalChurn(t *testing.T, unreliable bool) {
-	/*filehandle, err := os.OpenFile("./log.txt",
-		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-
-	if err != nil {
-		return
-	}
-	log.SetOutput(filehandle) */ // 这条代码，就是设置了日志文件的重定向
-
 	servers := 5
 	cfg := make_config(t, servers, unreliable, false)
 	defer cfg.cleanup()
@@ -1238,13 +1193,6 @@ func TestUnreliableChurn2C(t *testing.T) {
 const MAXLOGSIZE = 2000
 
 func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash bool) {
-	filehandle, err := os.OpenFile("./log.txt",
-		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-
-	if err != nil {
-		return
-	}
-	log.SetOutput(filehandle)
 	iters := 30
 	servers := 3
 	cfg := make_config(t, servers, !reliable, true)
