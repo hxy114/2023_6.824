@@ -8,7 +8,10 @@ package shardkv
 // talks to the group that holds the key's shard.
 //
 
-import "6.5840/labrpc"
+import (
+	"6.5840/labrpc"
+	"sync"
+)
 import "crypto/rand"
 import "math/big"
 import "6.5840/shardctrler"
@@ -38,6 +41,9 @@ type Clerk struct {
 	config   shardctrler.Config
 	make_end func(string) *labrpc.ClientEnd
 	// You will have to modify this struct.
+	seq int
+	mu  sync.Mutex
+	id  int64
 }
 
 // the tester calls MakeClerk.
@@ -71,6 +77,7 @@ func (ck *Clerk) Get(key string) string {
 			for si := 0; si < len(servers); si++ {
 				srv := ck.make_end(servers[si])
 				var reply GetReply
+				DPrintf("发送get消息")
 				ok := srv.Call("ShardKV.Get", &args, &reply)
 				if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
 					return reply.Value
@@ -97,7 +104,6 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 	args.Value = value
 	args.Op = op
 
-
 	for {
 		shard := key2shard(key)
 		gid := ck.config.Shards[shard]
@@ -105,6 +111,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 			for si := 0; si < len(servers); si++ {
 				srv := ck.make_end(servers[si])
 				var reply PutAppendReply
+				DPrintf("发送putappend消息")
 				ok := srv.Call("ShardKV.PutAppend", &args, &reply)
 				if ok && reply.Err == OK {
 					return

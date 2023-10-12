@@ -28,7 +28,7 @@ type Config struct {
 	Groups map[int][]string // gid -> servers[]
 }
 
-func clone(config Config) Config {
+func Clone(config Config) Config {
 	c := Config{
 		Num:    config.Num,
 		Shards: config.Shards,

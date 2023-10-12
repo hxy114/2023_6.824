@@ -292,7 +292,7 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 	if ok {
 		if duplicate.Seq == args.Seq {
 			reply.Err = OK
-			reply.Config = clone(duplicate.Value)
+			reply.Config = Clone(duplicate.Value)
 			reply.WrongLeader = false
 			return
 		} else if duplicate.Seq > args.Seq {
@@ -319,7 +319,7 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 						reply.WrongLeader = false
 
 					} else if duplicate.Seq == op.Seq {
-						reply.Config = clone(duplicate.Value)
+						reply.Config = Clone(duplicate.Value)
 						reply.Err = OK
 						reply.WrongLeader = false
 
@@ -486,7 +486,7 @@ func (sc *ShardCtrler) runApply() {
 						if duplicate.Seq >= op.Seq {
 							DPrintf("%d,收到raft的join提交消息，seq:%d,JoinServer:%v 是重复提交的", sc.me, op.Seq, op.JoinServer)
 						} else if duplicate.Seq < op.Seq {
-							config := clone(sc.configs[len(sc.configs)-1])
+							config := Clone(sc.configs[len(sc.configs)-1])
 							config.Num = len(sc.configs)
 							sc.join(&config, op)
 							DPrintf("%d，要加入的config:%v", sc.me, config)
@@ -500,7 +500,7 @@ func (sc *ShardCtrler) runApply() {
 
 						}
 					} else {
-						config := clone(sc.configs[len(sc.configs)-1])
+						config := Clone(sc.configs[len(sc.configs)-1])
 						config.Num = len(sc.configs)
 						sc.join(&config, op)
 						DPrintf("%d，要加入的config:%v", sc.me, config)
@@ -521,7 +521,7 @@ func (sc *ShardCtrler) runApply() {
 						if duplicate.Seq >= op.Seq {
 							DPrintf("%d,收到raft的leave提交消息，seq:%d,LeaveGIDs:%v 是重复提交的", sc.me, op.Seq, op.LeaveGIDs)
 						} else if duplicate.Seq < op.Seq {
-							config := clone(sc.configs[len(sc.configs)-1])
+							config := Clone(sc.configs[len(sc.configs)-1])
 							config.Num = len(sc.configs)
 							sc.leave(&config, op)
 							sc.configs = append(sc.configs, config)
@@ -534,7 +534,7 @@ func (sc *ShardCtrler) runApply() {
 
 						}
 					} else {
-						config := clone(sc.configs[len(sc.configs)-1])
+						config := Clone(sc.configs[len(sc.configs)-1])
 						config.Num = len(sc.configs)
 						sc.leave(&config, op)
 						sc.configs = append(sc.configs, config)
@@ -554,7 +554,7 @@ func (sc *ShardCtrler) runApply() {
 						if duplicate.Seq >= op.Seq {
 							DPrintf("%d,收到raft的move提交消息，seq:%d,MoveGID:%d,MoveShard:%d 是重复提交的", sc.me, op.Seq, op.MoveGID, op.MoveShard)
 						} else if duplicate.Seq < op.Seq {
-							config := clone(sc.configs[len(sc.configs)-1])
+							config := Clone(sc.configs[len(sc.configs)-1])
 							config.Num = len(sc.configs)
 							config.Shards[op.MoveShard] = op.MoveGID
 							sc.configs = append(sc.configs, config)
@@ -567,7 +567,7 @@ func (sc *ShardCtrler) runApply() {
 
 						}
 					} else {
-						config := clone(sc.configs[len(sc.configs)-1])
+						config := Clone(sc.configs[len(sc.configs)-1])
 						config.Num = len(sc.configs)
 						config.Shards[op.MoveShard] = op.MoveGID
 						sc.configs = append(sc.configs, config)
@@ -590,10 +590,10 @@ func (sc *ShardCtrler) runApply() {
 						} else if duplicate.Seq < op.Seq {
 							var config Config
 							if op.QueryNum == -1 || op.QueryNum >= len(sc.configs) {
-								config = clone(sc.configs[len(sc.configs)-1])
+								config = Clone(sc.configs[len(sc.configs)-1])
 
 							} else {
-								config = clone(sc.configs[op.QueryNum])
+								config = Clone(sc.configs[op.QueryNum])
 							}
 							d := Duplicate{
 								Seq:      op.Seq,
@@ -608,10 +608,10 @@ func (sc *ShardCtrler) runApply() {
 					} else {
 						var config Config
 						if op.QueryNum == -1 || op.QueryNum >= len(sc.configs) {
-							config = clone(sc.configs[len(sc.configs)-1])
+							config = Clone(sc.configs[len(sc.configs)-1])
 
 						} else {
-							config = clone(sc.configs[op.QueryNum])
+							config = Clone(sc.configs[op.QueryNum])
 						}
 						d := Duplicate{
 							Seq:      op.Seq,
