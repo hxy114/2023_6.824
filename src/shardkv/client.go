@@ -57,6 +57,8 @@ func MakeClerk(ctrlers []*labrpc.ClientEnd, make_end func(string) *labrpc.Client
 	ck := new(Clerk)
 	ck.sm = shardctrler.MakeClerk(ctrlers)
 	ck.make_end = make_end
+	ck.id = nrand()
+	ck.seq = 0
 	// You'll have to add code here.
 	return ck
 }
@@ -66,8 +68,10 @@ func MakeClerk(ctrlers []*labrpc.ClientEnd, make_end func(string) *labrpc.Client
 // keeps trying forever in the face of all other errors.
 // You will have to modify this function.
 func (ck *Clerk) Get(key string) string {
-	args := GetArgs{}
-	args.Key = key
+	args := GetArgs{ClientId: ck.id,
+		Seq: ck.seq,
+		Key: key}
+	ck.seq++
 
 	for {
 		shard := key2shard(key)
@@ -99,11 +103,12 @@ func (ck *Clerk) Get(key string) string {
 // shared by Put and Append.
 // You will have to modify this function.
 func (ck *Clerk) PutAppend(key string, value string, op string) {
-	args := PutAppendArgs{}
-	args.Key = key
-	args.Value = value
-	args.Op = op
-
+	args := PutAppendArgs{ClientId: ck.id,
+		Seq:   ck.seq,
+		Key:   key,
+		Value: value,
+		Op:    op}
+	ck.seq++
 	for {
 		shard := key2shard(key)
 		gid := ck.config.Shards[shard]
@@ -117,7 +122,24 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 					return
 				}
 				if ok && reply.Err == ErrWrongGroup {
+					DPrintf("发送putappend消息结束，ErrWrongGroup")
 					break
+				}
+				if ok && reply.Err == ErrWaitShardTran {
+					for {
+						time.Sleep(1 * time.Millisecond)
+						srv := ck.make_end(servers[si])
+						var reply PutAppendReply
+						DPrintf("发送putappend消息,ErrWaitShardTran")
+						ok1 := srv.Call("ShardKV.PutAppend", &args, &reply)
+						if !ok1 || reply.Err != ErrWaitShardTran {
+							break
+						}
+						if ok1 && reply.Err == OK {
+							return
+						}
+					}
+
 				}
 				// ... not ok, or ErrWrongLeader
 			}

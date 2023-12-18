@@ -8,7 +8,7 @@ import "log"
 // Shardctrler may change shard assignment from time to time.
 //
 // You will have to modify these definitions.
-const Debug = true
+const Debug = false
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
 	if Debug {
@@ -18,12 +18,14 @@ func DPrintf(format string, a ...interface{}) (n int, err error) {
 }
 
 const (
-	OK               = "OK"
-	ErrNoKey         = "ErrNoKey"
-	ErrWrongGroup    = "ErrWrongGroup"
-	ErrWrongLeader   = "ErrWrongLeader"
-	ErrWaitShardTran = "ErrWaitShardTran"
-	ErrExpired       = "ErrExpired"
+	OK                   = "OK"
+	ErrNoKey             = "ErrNoKey"
+	ErrWrongGroup        = "ErrWrongGroup"
+	ErrWrongLeader       = "ErrWrongLeader"
+	ErrWaitShardTran     = "ErrWaitShardTran"
+	ErrExpired           = "ErrExpired"
+	ErrWaitInstallConfig = "ErrWaitInstallConfig"
+	ErrWrongShardVersion = "ErrWrongShardVersion"
 )
 
 type Err string
@@ -65,4 +67,14 @@ type PullShardReply struct {
 	ConfigNum int
 	Err       Err
 	Data      []byte
+}
+type ChangeShardArgs struct {
+	ShardId    int
+	ConfigNum  int
+	ShardState shardState
+}
+type ChangeShardReply struct {
+	//ShardId   int
+	//ConfigNum int
+	Err Err
 }

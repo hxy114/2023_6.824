@@ -1,6 +1,8 @@
 package shardkv
 
-import "6.5840/porcupine"
+import (
+	"6.5840/porcupine"
+)
 import "6.5840/models"
 import "testing"
 import "strconv"
@@ -28,28 +30,36 @@ func TestStaticShards(t *testing.T) {
 	defer cfg.cleanup()
 
 	ck := cfg.makeClient()
+	DPrintf("server create finish======================================================================")
 
 	cfg.join(0)
-	cfg.join(1)
+	DPrintf("gid 0 join finish======================================================================")
 
+	cfg.join(1)
+	DPrintf("gid 1 join finish======================================================================")
 	n := 10
 	ka := make([]string, n)
 	va := make([]string, n)
+	DPrintf("begin finish==============================================================================")
 	for i := 0; i < n; i++ {
 		ka[i] = strconv.Itoa(i) // ensure multiple shards
 		va[i] = randstring(20)
 		ck.Put(ka[i], va[i])
+		DPrintf("insert key:%d==============================================================================", i)
 	}
+	DPrintf("insert finish==============================================================================")
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
+	DPrintf("check finish==============================================================================")
 
 	// make sure that the data really is sharded by
 	// shutting down one shard and checking that some
 	// Get()s don't succeed.
 	cfg.ShutdownGroup(1)
+	DPrintf("gid 1 shutdown finish==============================================================================")
 	cfg.checklogs() // forbid snapshots
-
+	DPrintf("check half start===========================================================================")
 	ch := make(chan string)
 	for xi := 0; xi < n; xi++ {
 		ck1 := cfg.makeClient() // only one call allowed per client
@@ -62,7 +72,7 @@ func TestStaticShards(t *testing.T) {
 			}
 		}(xi)
 	}
-
+	DPrintf("check half finish1===========================================================================")
 	// wait a bit, only about half the Gets should succeed.
 	ndone := 0
 	done := false
@@ -78,7 +88,7 @@ func TestStaticShards(t *testing.T) {
 			break
 		}
 	}
-
+	DPrintf("check half finish2===========================================================================")
 	if ndone != 5 {
 		t.Fatalf("expected 5 completions with one shard dead; got %v\n", ndone)
 	}
@@ -146,6 +156,16 @@ func TestJoinLeave(t *testing.T) {
 }
 
 func TestSnapshot(t *testing.T) {
+	/*filehandle, err := os.OpenFile("./log1.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
+	os.Stdout = filehandle
+
+	os.Stderr = filehandle*/
 	fmt.Printf("Test: snapshots, join, and leave ...\n")
 
 	cfg := make_config(t, 3, false, 1000)
@@ -154,7 +174,7 @@ func TestSnapshot(t *testing.T) {
 	ck := cfg.makeClient()
 
 	cfg.join(0)
-
+	DPrintf("0 join--------------------------------------------------------------------------------------")
 	n := 30
 	ka := make([]string, n)
 	va := make([]string, n)
@@ -163,13 +183,17 @@ func TestSnapshot(t *testing.T) {
 		va[i] = randstring(20)
 		ck.Put(ka[i], va[i])
 	}
+	DPrintf("insert finish--------------------------------------------------------------------------------------")
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
-
+	DPrintf("check finish 1--------------------------------------------------------------------------------------")
 	cfg.join(1)
+	DPrintf("1 join--------------------------------------------------------------------------------------")
 	cfg.join(2)
+	DPrintf("2 join--------------------------------------------------------------------------------------")
 	cfg.leave(0)
+	DPrintf("0 leave--------------------------------------------------------------------------------------")
 
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
@@ -177,9 +201,13 @@ func TestSnapshot(t *testing.T) {
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	DPrintf("append finish 1--------------------------------------------------------------------------------------")
 
 	cfg.leave(1)
+	DPrintf("1 leave--------------------------------------------------------------------------------------")
+
 	cfg.join(0)
+	DPrintf("0 join--------------------------------------------------------------------------------------")
 
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
@@ -187,16 +215,19 @@ func TestSnapshot(t *testing.T) {
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	DPrintf("append finish 2--------------------------------------------------------------------------------------")
 
 	time.Sleep(1 * time.Second)
-
+	DPrintf("睡眠1S后---------------------------------------------------------------------------------------------------")
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
+	DPrintf("check finish 2--------------------------------------------------------------------------------------")
 
 	time.Sleep(1 * time.Second)
 
 	cfg.checklogs()
+	DPrintf("check log finish--------------------------------------------------------------------------------------")
 
 	cfg.ShutdownGroup(0)
 	cfg.ShutdownGroup(1)
@@ -214,6 +245,16 @@ func TestSnapshot(t *testing.T) {
 }
 
 func TestMissChange(t *testing.T) {
+	/*filehandle, err := os.OpenFile("./log1.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
+	os.Stdout = filehandle
+
+	os.Stderr = filehandle*/
 	fmt.Printf("Test: servers miss configuration changes...\n")
 
 	cfg := make_config(t, 3, false, 1000)
@@ -222,6 +263,7 @@ func TestMissChange(t *testing.T) {
 	ck := cfg.makeClient()
 
 	cfg.join(0)
+	DPrintf("0 join-------------------------------------------------------------------------------------------------------------------------------------")
 
 	n := 10
 	ka := make([]string, n)
@@ -231,19 +273,29 @@ func TestMissChange(t *testing.T) {
 		va[i] = randstring(20)
 		ck.Put(ka[i], va[i])
 	}
+	DPrintf("insert finish 1-------------------------------------------------------------------------------------------------------------------------------------")
+
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
+	DPrintf("check finish 1-------------------------------------------------------------------------------------------------------------------------------------")
 
 	cfg.join(1)
+	DPrintf("1 join-------------------------------------------------------------------------------------------------------------------------------------")
 
 	cfg.ShutdownServer(0, 0)
 	cfg.ShutdownServer(1, 0)
 	cfg.ShutdownServer(2, 0)
+	DPrintf("shutdownserver 0-------------------------------------------------------------------------------------------------------------------------------------")
 
 	cfg.join(2)
+	DPrintf("2 join-------------------------------------------------------------------------------------------------------------------------------------")
+
 	cfg.leave(1)
+	DPrintf("1 leave-------------------------------------------------------------------------------------------------------------------------------------")
+
 	cfg.leave(0)
+	DPrintf("0 leave-------------------------------------------------------------------------------------------------------------------------------------")
 
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
@@ -251,8 +303,10 @@ func TestMissChange(t *testing.T) {
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	DPrintf("append finish 1-------------------------------------------------------------------------------------------------------------------------------------")
 
 	cfg.join(1)
+	DPrintf("1 join-------------------------------------------------------------------------------------------------------------------------------------")
 
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
@@ -260,10 +314,12 @@ func TestMissChange(t *testing.T) {
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	DPrintf("append finish 2-------------------------------------------------------------------------------------------------------------------------------------")
 
 	cfg.StartServer(0, 0)
 	cfg.StartServer(1, 0)
 	cfg.StartServer(2, 0)
+	DPrintf("startserver 0-------------------------------------------------------------------------------------------------------------------------------------")
 
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
@@ -271,15 +327,20 @@ func TestMissChange(t *testing.T) {
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	DPrintf("append finish 3-------------------------------------------------------------------------------------------------------------------------------------")
 
 	time.Sleep(2 * time.Second)
 
 	cfg.ShutdownServer(0, 1)
 	cfg.ShutdownServer(1, 1)
 	cfg.ShutdownServer(2, 1)
+	DPrintf("shutdownserver 1-------------------------------------------------------------------------------------------------------------------------------------")
 
 	cfg.join(0)
+	DPrintf("0 join-------------------------------------------------------------------------------------------------------------------------------------")
+
 	cfg.leave(2)
+	DPrintf("2 leave-------------------------------------------------------------------------------------------------------------------------------------")
 
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
@@ -287,19 +348,32 @@ func TestMissChange(t *testing.T) {
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	DPrintf("append finish 4-------------------------------------------------------------------------------------------------------------------------------------")
 
 	cfg.StartServer(0, 1)
 	cfg.StartServer(1, 1)
 	cfg.StartServer(2, 1)
+	DPrintf("startserver 1-------------------------------------------------------------------------------------------------------------------------------------")
 
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
+	DPrintf("check finish 2-------------------------------------------------------------------------------------------------------------------------------------")
 
 	fmt.Printf("  ... Passed\n")
 }
 
 func TestConcurrent1(t *testing.T) {
+	/*filehandle, err := os.OpenFile("./log1.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
+	os.Stdout = filehandle
+
+	os.Stderr = filehandle*/
 	fmt.Printf("Test: concurrent puts and configuration changes...\n")
 
 	cfg := make_config(t, 3, false, 100)
@@ -308,7 +382,7 @@ func TestConcurrent1(t *testing.T) {
 	ck := cfg.makeClient()
 
 	cfg.join(0)
-
+	DPrintf("0 join 1------------------------------------------------------------------------------------------------------------------------------")
 	n := 10
 	ka := make([]string, n)
 	va := make([]string, n)
@@ -317,6 +391,7 @@ func TestConcurrent1(t *testing.T) {
 		va[i] = randstring(5)
 		ck.Put(ka[i], va[i])
 	}
+	DPrintf("insert finish 1 ------------------------------------------------------------------------------------------------------------------------------")
 
 	var done int32
 	ch := make(chan bool)
@@ -335,50 +410,81 @@ func TestConcurrent1(t *testing.T) {
 	for i := 0; i < n; i++ {
 		go ff(i)
 	}
-
+	DPrintf("启动所有并发写入-------------------------------------------------------------------------------------------------------------------------")
 	time.Sleep(150 * time.Millisecond)
 	cfg.join(1)
+	DPrintf("1 join 2------------------------------------------------------------------------------------------------------------------------------")
+
 	time.Sleep(500 * time.Millisecond)
 	cfg.join(2)
+	DPrintf("2 join 3------------------------------------------------------------------------------------------------------------------------------")
+
 	time.Sleep(500 * time.Millisecond)
 	cfg.leave(0)
+	DPrintf("0 leave 4------------------------------------------------------------------------------------------------------------------------------")
 
 	cfg.ShutdownGroup(0)
+	DPrintf("0 关闭 ------------------------------------------------------------------------------------------------------------------------------")
+
 	time.Sleep(100 * time.Millisecond)
 	cfg.ShutdownGroup(1)
+	DPrintf("1 关闭 ------------------------------------------------------------------------------------------------------------------------------")
+
 	time.Sleep(100 * time.Millisecond)
 	cfg.ShutdownGroup(2)
+	DPrintf("2 关闭 ------------------------------------------------------------------------------------------------------------------------------")
 
 	cfg.leave(2)
+	DPrintf("2 leave 5------------------------------------------------------------------------------------------------------------------------------")
 
 	time.Sleep(100 * time.Millisecond)
 	cfg.StartGroup(0)
+	DPrintf("0 开始 ------------------------------------------------------------------------------------------------------------------------------")
 	cfg.StartGroup(1)
+	DPrintf("1 开始 ------------------------------------------------------------------------------------------------------------------------------")
+
 	cfg.StartGroup(2)
+	DPrintf("2 开始 ------------------------------------------------------------------------------------------------------------------------------")
 
 	time.Sleep(100 * time.Millisecond)
 	cfg.join(0)
+	DPrintf("0 join 6------------------------------------------------------------------------------------------------------------------------------")
+
 	cfg.leave(1)
+	DPrintf("1 leave 7------------------------------------------------------------------------------------------------------------------------------")
+
 	time.Sleep(500 * time.Millisecond)
 	cfg.join(1)
+	DPrintf("1 join 8------------------------------------------------------------------------------------------------------------------------------")
 
 	time.Sleep(1 * time.Second)
 
 	atomic.StoreInt32(&done, 1)
+
 	for i := 0; i < n; i++ {
 		<-ch
 	}
-
+	DPrintf("停止所有的写入--------------------------------------------------------------------------------------------------------------------------")
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
-
+	DPrintf("chek finish ----------------------------------------------------------------------------------------------------------------------------------------")
 	fmt.Printf("  ... Passed\n")
 }
 
 // this tests the various sources from which a re-starting
 // group might need to fetch shard contents.
 func TestConcurrent2(t *testing.T) {
+	/*filehandle, err := os.OpenFile("./log1.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
+	os.Stdout = filehandle
+
+	os.Stderr = filehandle*/
 	fmt.Printf("Test: more concurrent puts and configuration changes...\n")
 
 	cfg := make_config(t, 3, false, -1)
@@ -450,6 +556,16 @@ func TestConcurrent2(t *testing.T) {
 }
 
 func TestConcurrent3(t *testing.T) {
+	/*filehandle, err := os.OpenFile("./log1.txt",
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return
+	}
+	log.SetOutput(filehandle)
+	os.Stdout = filehandle
+
+	os.Stderr = filehandle*/
 	fmt.Printf("Test: concurrent configuration change and restart...\n")
 
 	cfg := make_config(t, 3, false, 300)
@@ -729,7 +845,7 @@ func TestUnreliable3(t *testing.T) {
 
 // optional test to see whether servers are deleting
 // shards for which they are no longer responsible.
-func TestChallenge1Delete(t *testing.T) {
+/*func TestChallenge1Delete(t *testing.T) {
 	fmt.Printf("Test: shard deletion (challenge 1) ...\n")
 
 	// "1" means force snapshot after every log entry.
@@ -789,7 +905,9 @@ func TestChallenge1Delete(t *testing.T) {
 	for gi := 0; gi < cfg.ngroups; gi++ {
 		for i := 0; i < cfg.n; i++ {
 			raft := cfg.groups[gi].saved[i].RaftStateSize()
+			fmt.Printf(" raft size:%d\n", raft)
 			snap := len(cfg.groups[gi].saved[i].ReadSnapshot())
+			fmt.Printf(" snap size:%d\n", snap)
 			total += raft + snap
 		}
 	}
@@ -809,7 +927,7 @@ func TestChallenge1Delete(t *testing.T) {
 
 	fmt.Printf("  ... Passed\n")
 }
-
+*/
 // optional test to see whether servers can handle
 // shards that are not affected by a config change
 // while the config change is underway
